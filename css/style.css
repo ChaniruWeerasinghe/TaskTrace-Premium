@@ -11,6 +11,16 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Admin Mode Exit Blink */
+@keyframes pulse-red {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.95); }
+}
+
+.animate-pulse-red {
+    animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 :root {
     --accent-from: #a855f7;
     --accent-to: #7e22ce;
@@ -320,6 +330,11 @@ textarea:focus {
     pointer-events: auto;
 }
 
+/* Subtask Overrides for Smart Positioning */
+.subtask-dropdown-menu {
+    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
 .dropdown-item {
     padding: 12px 16px;
     border-radius: 12px;
@@ -354,4 +369,75 @@ textarea:focus {
     margin-right: 12px;
     flex-shrink: 0;
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* --- MEETING FREQUENCY WAVES --- */
+.speaking-wave {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 25px;
+    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    opacity: 0;
+    transform: scaleY(0.5);
+}
+
+.speaking-wave.active {
+    opacity: 1;
+    transform: scaleY(1);
+}
+
+.wave-bar {
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(to top, var(--accent-from), #06b6d4);
+    border-radius: 4px;
+}
+
+.speaking-wave.active .wave-bar {
+    animation: wavePulse 1s ease-in-out infinite alternate;
+}
+
+.wave-bar:nth-child(2) { animation-delay: 0.1s !important; }
+.wave-bar:nth-child(3) { animation-delay: 0.2s !important; height: 120%; }
+.wave-bar:nth-child(4) { animation-delay: 0.3s !important; }
+.wave-bar:nth-child(5) { animation-delay: 0.4s !important; height: 80%; }
+
+@keyframes wavePulse {
+    0% { transform: scaleY(0.4); filter: brightness(0.8); }
+    100% { transform: scaleY(1.2); filter: brightness(1.2); }
+}
+
+.participant-card {
+    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.participant-card.is-speaking {
+    border-color: rgba(168, 85, 247, 0.4);
+    background: rgba(168, 85, 247, 0.05);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 40px -10px rgba(168, 85, 247, 0.25);
+}
+
+/* Responsiveness Fixes */
+@media (max-width: 768px) {
+    h1 { font-size: 2.5rem !important; }
+    h2 { font-size: 2rem !important; }
+    .glass { backdrop-filter: blur(10px); }
+    .pt-32 { padding-top: 6rem !important; }
+}
+
+@media (max-width: 640px) {
+    h1 { font-size: 2rem !important; }
+    h2 { font-size: 1.75rem !important; }
+    .px-10 { padding-left: 1rem !important; padding-right: 1rem !important; }
+    .px-8 { padding-left: 1rem !important; padding-right: 1rem !important; }
+    .py-10 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
+    
+    .dropdown-menu {
+        width: 100% !important;
+        right: 0 !important;
+        left: 0 !important;
+    }
 }

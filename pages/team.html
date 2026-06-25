@@ -36,9 +36,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
 
-    <!-- Firebase SDK (Compat Version) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
 
     <!-- Custom Styles -->
     <link rel="stylesheet" href="../css/style.css">
@@ -54,7 +56,7 @@
         <div id="member-view" class="view-transition view-visible flex flex-col items-center min-h-[50vh] p-6 pb-20">
             <!-- Top Navigation Row -->
             <div
-                class="w-full max-w-[1400px] xl:max-w-7xl mx-auto mb-8 md:mb-12 flex justify-between items-center px-4 md:px-6">
+                class="w-full max-w-[1400px] xl:max-w-7xl mx-auto mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-start md:items-center px-4 md:px-6 gap-4 md:gap-0">
                 <button onclick="backToProjects()"
                     class="group flex items-center space-x-2 md:space-x-3 px-4 md:px-6 py-2.5 md:py-3 bg-white/5 hover:bg-white/10 rounded-xl md:rounded-2xl border border-white/5 transition-all">
                     <i data-lucide="arrow-left"
@@ -62,18 +64,33 @@
                     <span class="text-[9px] md:text-[10px] font-black uppercase tracking-widest">Back</span>
                 </button>
 
-                <!-- Sprint Analytics Toggle -->
-                <button onclick="goToAnalytics()"
-                    class="group flex items-center space-x-2 md:space-x-3 px-4 md:px-6 py-2.5 md:py-3 bg-emerald-500/5 hover:bg-emerald-500/10 rounded-xl md:rounded-2xl border border-emerald-500/10 transition-all duration-300">
-                    <span class="relative flex h-2 w-2">
+                <!-- Sprint Analytics & Meeting Room PIII -->
+                <div class="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto">
+                    <button onclick="openMeetingModal('create')"
+                        class="group flex items-center space-x-2 md:space-x-3 px-4 md:px-6 py-2.5 md:py-3 bg-indigo-500/5 hover:bg-indigo-500/10 rounded-full border border-indigo-500/10 transition-all duration-300">
+                        <i data-lucide="plus" class="w-3.5 md:w-4 h-3.5 md:h-4 text-indigo-400 group-hover:rotate-90 transition-transform duration-500"></i>
+                        <span class="text-[8px] md:text-[9px] font-black uppercase tracking-[0.1em] md:tracking-[0.2em] text-indigo-400">Create Meeting</span>
+                    </button>
+
+                    <button onclick="openMeetingModal('join')"
+                        class="group flex items-center space-x-2 md:space-x-3 px-4 md:px-6 py-2.5 md:py-3 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all duration-300">
+                        <i data-lucide="video" class="w-3.5 md:w-4 h-3.5 md:h-4 text-gray-400 group-hover:text-white transition-colors"></i>
+                        <span class="text-[8px] md:text-[9px] font-black uppercase tracking-[0.1em] md:tracking-[0.2em] text-gray-400 group-hover:text-white transition-colors">Join Meeting</span>
+                    </button>
+
+                    <button onclick="goToAnalytics()"
+                        class="group flex items-center space-x-2 md:space-x-3 px-4 md:px-6 py-2.5 md:py-3 bg-emerald-500/5 hover:bg-emerald-500/10 rounded-full border border-emerald-500/10 transition-all duration-300">
+                        <span class="relative flex h-2 w-2">
+                            <span
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <i data-lucide="bar-chart-2" class="w-3.5 md:w-4 h-3.5 md:h-4 text-emerald-500/80"></i>
                         <span
-                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    <i data-lucide="bar-chart-2" class="w-3.5 md:w-4 h-3.5 md:h-4 text-emerald-500/80"></i>
-                    <span
-                        class="text-[8px] md:text-[9px] font-black uppercase tracking-[0.1em] md:tracking-[0.2em] text-emerald-500/80">Analytics</span>
-                </button>
+                            class="text-[8px] md:text-[9px] font-black uppercase tracking-[0.1em] md:tracking-[0.2em] text-emerald-500/80">Analytics</span>
+                    </button>
+                </div>
+
             </div>
 
             <!-- Page Header + Actions Row -->
@@ -95,6 +112,16 @@
                         <span class="font-black uppercase tracking-widest text-[8px] md:text-[9px]">Global</span>
                     </button>
 
+
+
+                    <button onclick="openInviteModal()"
+                        class="group flex items-center justify-center space-x-2 md:space-x-3 px-4 md:px-5 py-3 md:py-3.5 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-xl md:rounded-2xl border border-indigo-500/20 transition-all duration-300 w-full lg:w-auto">
+                        <div class="w-5 h-5 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
+                            <i data-lucide="mail-plus" class="w-3 md:w-3.5 h-3 md:h-3.5"></i>
+                        </div>
+                        <span class="font-black uppercase tracking-widest text-[8px] md:text-[9px] text-indigo-400">Invite</span>
+                    </button>
+
                     <button onclick="openGenericModal('member')"
                         class="group flex items-center justify-center space-x-2 md:space-x-3 px-4 md:px-5 py-3 md:py-3.5 bg-white/5 hover:bg-white/10 rounded-xl md:rounded-2xl border border-white/10 transition-all duration-300 w-full lg:w-auto">
                         <div
@@ -103,6 +130,7 @@
                         </div>
                         <span class="font-black uppercase tracking-widest text-[8px] md:text-[9px]">Member</span>
                     </button>
+
 
                     <div class="flex items-center space-x-1 lg:w-auto">
                         <button onclick="openGenericModal('sprint')"
@@ -119,17 +147,86 @@
                         </button>
                     </div>
 
+
                     <button onclick="openGenericModal('task')"
                         class="group flex items-center justify-center space-x-2 md:space-x-4 px-6 md:px-8 py-3 md:py-3.5 bg-accent-purple hover:bg-purple-600 rounded-xl md:rounded-2xl transition-all duration-300 shadow-xl shadow-purple-500/20 w-full lg:w-auto">
                         <i data-lucide="plus" class="w-3.5 md:w-4 h-3.5 md:h-4 text-white"></i>
-                        <span class="font-black uppercase tracking-widest text-[8px] md:text-[9px]">Mission</span>
+                        <span class="font-black uppercase tracking-widest text-[8px] md:text-[9px]">Main Task</span>
                     </button>
                 </div>
             </div>
 
             <div id="member-grid"
-                class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-8 w-full max-w-[1400px] xl:max-w-7xl mx-auto px-2 md:px-6 items-stretch mb-20">
+                class="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 w-full max-w-[1400px] xl:max-w-7xl mx-auto px-4 md:px-6 items-stretch mb-20">
                 <!-- Members injected here -->
+            </div>
+
+            <!-- Pending Invitations Section -->
+            <div id="invitations-section" class="w-full max-w-[1400px] xl:max-w-7xl mx-auto px-4 md:px-6 mb-20 animate-fadeIn hidden">
+                <div class="flex items-center space-x-4 mb-8">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+                        <i data-lucide="mail" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black uppercase tracking-widest text-white">Pending Invitations</h3>
+                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Awaiting acceptance from team members</p>
+                    </div>
+                </div>
+                
+                <div id="invitations-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Invitations injected here -->
+                </div>
+            </div>
+
+            <!-- Meeting History Section -->
+            <div class="w-full max-w-[1400px] xl:max-w-7xl mx-auto px-4 md:px-6 mb-20 animate-fadeIn">
+                <div class="flex items-center space-x-4 mb-8">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+                        <i data-lucide="history" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black uppercase tracking-widest text-white">Meeting History</h3>
+                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Previous Session Logs & Analytics</p>
+                    </div>
+                </div>
+                
+                <div id="meeting-history-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- History injected here -->
+                    <div class="col-span-full py-12 glass rounded-[32px] border border-white/5 flex flex-col items-center justify-center text-center">
+                        <p class="text-gray-500 text-xs font-bold uppercase tracking-widest">No meeting records found</p>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Claim Profile Modal -->
+            <div id="claim-profile-modal" class="fixed inset-0 z-[100] hidden items-center justify-center p-4">
+                <div class="absolute inset-0 bg-gray-950/90 backdrop-blur-3xl overlay-backdrop"></div>
+                <div class="relative w-full max-w-lg glass p-8 md:p-12 rounded-[40px] border border-white/10 shadow-2xl flex flex-col transform scale-95 opacity-0 transition-all duration-300" id="claim-profile-container">
+                    
+                    <div class="text-center mb-8">
+                        <div class="w-20 h-20 mx-auto rounded-[32px] bg-gradient-to-br from-indigo-500/10 to-purple-500/10 flex items-center justify-center border border-white/5 mb-6 shadow-inner">
+                            <i data-lucide="user-check" class="w-10 h-10 text-indigo-400"></i>
+                        </div>
+                        <h2 class="text-3xl font-black text-white tracking-tighter mb-3">Claim Your Profile</h2>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest leading-relaxed">Select your existing project profile to link it to your newly secured authentication account.</p>
+                    </div>
+
+                    <div id="legacy-members-list" class="flex flex-col space-y-3 mb-8 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                        <!-- Legacy members injected here -->
+                    </div>
+
+                    <div class="pt-6 border-t border-white/10">
+                        <button onclick="openNewProfileForm()" class="w-full relative group overflow-hidden rounded-2xl p-[1px]">
+                            <span class="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl opacity-70 group-hover:opacity-100 transition-opacity"></span>
+                            <div class="relative flex items-center justify-center space-x-3 bg-gray-950/90 backdrop-blur-xl px-8 py-4 rounded-2xl transition-all">
+                                <i data-lucide="plus" class="w-5 h-5 text-indigo-400 group-hover:text-white transition-colors"></i>
+                                <span class="font-black text-white tracking-widest uppercase text-[10px]">Create New Profile</span>
+                            </div>
+                        </button>
+                    </div>
+
+                </div>
             </div>
 
             <!-- Scripts -->

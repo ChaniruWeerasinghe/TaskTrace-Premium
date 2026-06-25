@@ -2,6 +2,7 @@
 // Only declare unique local state here
 let allTasks = {};
 let selectedSprint = localStorage.getItem('tt_sprint') || 'All';
+let selectedChartSprint = 'All'; // Chart always defaults to 'All' on load as requested
 
 function getOrdinal(n) {
     const s = ["th", "st", "nd", "rd"], v = n % 100;
@@ -43,7 +44,7 @@ function initAnalytics() {
     database.ref(`projects/${selectedProjId}/members`).on('value', snap => {
         currentMembers = snap.val() || {};
         checkAndRefresh();
-        if (loadingText) loadingText.innerText = "Analyzing Missions...";
+        if (loadingText) loadingText.innerText = "Analyzing Main Tasks...";
         hideLoader();
     });
 
@@ -66,6 +67,7 @@ function checkAndRefresh() {
     // If we have members, we can at least show the chart (even if empty)
     if (Object.keys(currentMembers).length >= 0) {
         populateSprintSelector();
+        populateChartSprintSelector(); // Refresh both selectors
     }
 }
 
@@ -103,7 +105,7 @@ function populateSprintSelector() {
                 <div class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center mr-3 group-hover/item:bg-accent-purple/20 transition-colors">
                     <i data-lucide="layers" class="w-3.5 h-3.5 text-gray-500 group-hover/item:text-accent-purple"></i>
                 </div>
-                <span class="text-[10px] font-bold uppercase tracking-wider">All Missions</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider">All Main Tasks</span>
             </div>
             ${selectedSprint === 'All' ? '<i data-lucide="check" class="w-3.5 h-3.5 text-accent-purple"></i>' : ''}
         </div>
@@ -129,7 +131,7 @@ function populateSprintSelector() {
     menu.innerHTML = menuHTML;
 
     if (selectedSprint === 'All') {
-        text.innerText = 'All Missions';
+        text.innerText = 'All Main Tasks';
     } else {
         const activeNum = parseInt(selectedSprint);
         text.innerText = !isNaN(activeNum) ? `${activeNum}${getOrdinal(activeNum)} Sprint` : selectedSprint;
@@ -154,25 +156,102 @@ function selectSprint(sprint) {
     populateSprintSelector();
 }
 
+// --- Independent Chart Sprint Logic ---
+function toggleChartSprintDropdown(e) {
+    e.stopPropagation();
+    document.getElementById('chart-sprint-selector-dropdown').classList.toggle('active');
+}
+
+function selectChartSprint(sprint) {
+    selectedChartSprint = sprint;
+    const dropdown = document.getElementById('chart-sprint-selector-dropdown');
+    if (dropdown) dropdown.classList.remove('active');
+    populateChartSprintSelector();
+    updateAnalytics(); // Re-render with new filter
+}
+
+function populateChartSprintSelector() {
+    const menu = document.getElementById('chart-sprint-menu');
+    const text = document.getElementById('chart-selected-sprint-text');
+    if (!menu) return;
+
+    const sprintSet = new Set();
+    Object.keys(currentSprints || {}).forEach(k => sprintSet.add(k));
+    Object.values(allTasks).forEach(t => { if (t.sprintName) sprintSet.add(t.sprintName); });
+
+    const sprintList = Array.from(sprintSet).sort((a, b) => {
+        const na = parseInt(a), nb = parseInt(b);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return String(a).localeCompare(String(b));
+    });
+
+    let menuHTML = `
+        <div class="dropdown-item group/item ${selectedChartSprint === 'All' ? 'selected' : ''}" onclick="selectChartSprint('All')">
+            <span class="text-[10px] font-black uppercase tracking-wider">All Sprints</span>
+            ${selectedChartSprint === 'All' ? '<i data-lucide="check" class="w-3.5 h-3.5 text-accent-purple"></i>' : ''}
+        </div>
+    `;
+
+    sprintList.forEach(s => {
+        const isSelected = selectedChartSprint === s;
+        const displayLabel = isNaN(parseInt(s)) ? s : `Sprint ${s}`;
+        menuHTML += `
+            <div class="dropdown-item group/item ${isSelected ? 'selected' : ''}" onclick="selectChartSprint('${s}')">
+                <span class="text-[10px] font-black uppercase tracking-wider">${displayLabel}</span>
+                ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-accent-purple"></i>' : ''}
+            </div>
+        `;
+    });
+
+    menu.innerHTML = menuHTML;
+    text.innerText = selectedChartSprint === 'All' ? 'All Sprints' : 
+                   (isNaN(parseInt(selectedChartSprint)) ? selectedChartSprint : `Sprint ${selectedChartSprint}`);
+    
+    refreshIcons();
+}
+
 function updateAnalytics() {
     if (!selectedSprint) return;
 
-    // Filter tasks based on selected sprint
+    // 1. Stats Filter (Main Dropdown)
     const sprintTasks = selectedSprint === 'All'
         ? Object.values(allTasks)
         : Object.values(allTasks).filter(t => t.sprintName === selectedSprint);
-    const total = sprintTasks.length;
-    const done = sprintTasks.filter(t => t.status === 'Done').length;
-    const velocity = total > 0 ? Math.round((done / total) * 100) : 0;
+    
+    // 2. Chart Filter (Independent Dropdown)
+    const chartTasks = selectedChartSprint === 'All'
+        ? Object.values(allTasks)
+        : Object.values(allTasks).filter(t => t.sprintName === selectedChartSprint);
+    
+    // Mission Count (for Stats)
+    const totalMissions = sprintTasks.length;
+    const doneMissions = sprintTasks.filter(t => t.status === 'Done').length;
+    
+    // Subtask Count (for Stats)
+    let totalSubtasks = 0;
+    let doneSubtasks = 0;
+    
+    sprintTasks.forEach(t => {
+        const subtasks = t.subTasks || [];
+        if (subtasks.length > 0) {
+            totalSubtasks += subtasks.length;
+            doneSubtasks += subtasks.filter(st => {
+                const isDone = st && (st.status === 'Done' || st.completed === true);
+                return isDone;
+            }).length;
+        }
+    });
 
-    // High Level Stats
-    animateValue('stat-total', parseInt(document.getElementById('stat-total').innerText) || 0, total, 1000);
-    animateValue('stat-done', parseInt(document.getElementById('stat-done').innerText) || 0, done, 1000);
+    const velocity = totalMissions > 0 ? Math.round((doneMissions / totalMissions) * 100) : 0;
+
+    // High Level Stats update
+    animateValue('stat-total', parseInt(document.getElementById('stat-total').innerText) || 0, totalMissions, 1000);
+    animateValue('stat-done', parseInt(document.getElementById('stat-done').innerText) || 0, doneMissions, 1000);
     document.getElementById('stat-velocity').innerText = `${velocity}%`;
 
-    renderPerformanceChart(sprintTasks);
-    renderStatusDistribution(sprintTasks);
-    updateSprintInsight(velocity, sprintTasks);
+    // Render Displays
+    renderPerformanceChart(chartTasks); // Use independent chart tasks!
+    renderStatusDistribution(sprintTasks); // Use stats tasks!
 }
 
 let performanceChart = null;
@@ -185,49 +264,96 @@ function renderPerformanceChart(tasks) {
         return;
     }
 
-    // --- DATA PROCESSING FOR BURNDOWN ---
+    // --- DATA PROCESSING FOR PERFORMANCE ---
     // 1. Determine Date Range
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const dates = tasks.filter(t => t.endDate).map(t => new Date(t.endDate));
-    if (dates.length === 0) return; // Need end dates for burndown
+    // Get all completion/update dates to find the range of activity
+    const activityDates = [];
+    tasks.forEach(t => {
+        if (t.completedAt) activityDates.push(new Date(t.completedAt));
+        else if (t.updatedAt) activityDates.push(new Date(t.updatedAt));
+        if (t.createdAt) activityDates.push(new Date(t.createdAt));
+        if (t.endDate) activityDates.push(new Date(t.endDate));
 
-    const sprintEnd = new Date(Math.max(...dates));
+        // CRITICAL FIX: Also check subtask completion dates for the chart's range!
+        const subtasks = t.subTasks || [];
+        subtasks.forEach(st => {
+            if (st.completedAt) activityDates.push(new Date(st.completedAt));
+        });
+    });
+
+    let sprintStart, sprintEnd;
+
+    if (activityDates.length > 0) {
+        sprintStart = new Date(Math.min(...activityDates.map(d => d.getTime())));
+        sprintEnd = new Date(Math.max(...activityDates.map(d => d.getTime())));
+    } else {
+        sprintStart = new Date();
+        sprintStart.setDate(sprintStart.getDate() - 7);
+        sprintEnd = new Date();
+    }
+
+    sprintStart.setHours(0, 0, 0, 0);
     sprintEnd.setHours(0, 0, 0, 0);
 
-    // Sprint Start: Usually we'd have this, but let's assume 14 days before end or earliest created date
-    const creationDates = tasks.map(t => new Date(t.createdAt || Date.now()));
-    const sprintStart = new Date(Math.min(...creationDates));
-    sprintStart.setHours(0, 0, 0, 0);
-
+    // Ensure we show at least a few days of context around today
+    const chartStart = new Date(sprintStart);
+    if (chartStart > today) chartStart.setDate(today.getDate() - 2);
+    
+    const chartEnd = new Date(sprintEnd);
+    if (chartEnd < today) chartEnd.setDate(today.getDate() + 2);
 
     const dailyLabels = [];
     const chartData_Velocity = [];
 
-    let curr = new Date(sprintStart);
-    // Start 1-2 days before today to show context history
-    if (curr.getTime() >= today.getTime()) {
-        curr.setDate(curr.getDate() - 2);
-    } else {
-        curr.setDate(curr.getDate() - 1);
-    }
+    let curr = new Date(chartStart);
+    // Limit to last 30 days to avoid clutter if the project is old
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    if (curr < thirtyDaysAgo) curr = thirtyDaysAgo;
 
-    while (curr <= today || curr <= sprintEnd) {
+    while (curr <= chartEnd || curr <= today) {
         const dateStr = curr.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         dailyLabels.push(dateStr);
 
-        // Count missions completed ON THIS SPECIFIC DAY
-        const completionsOnThisDay = tasks.filter(t => {
-            if (t.status !== 'Done') return false;
-            const doneDate = new Date(t.updatedAt || t.createdAt);
-            return doneDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === dateStr;
-        }).length;
+        let actionsDoneToday = 0;
 
-        chartData_Velocity.push(completionsOnThisDay);
+        tasks.forEach(t => {
+            // Main task completion
+            if (t.status === 'Done') {
+                const doneTimestamp = t.completedAt; // STRICT: ONLY count if it has an actual completion date!
+                if (doneTimestamp) {
+                    const doneDate = new Date(doneTimestamp);
+                    if (doneDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === dateStr) {
+                        actionsDoneToday++;
+                    }
+                }
+            }
+            
+            // Subtask completion
+            const subtasks = t.subTasks || [];
+            subtasks.forEach(st => {
+                const stIsDone = st.status === 'Done' || st.completed === true;
+                if (stIsDone) {
+                    // STRICTOR FIX: Use ONLY actual completion times. 
+                    // Fall back ONLY to t.completedAt if the subtask has no stamp but the task is done.
+                    // DO NOT use updatedAt or createdAt for completion charts (those move with Setiap edit!)
+                    const stDoneTimestamp = st.completedAt || (t.status === 'Done' ? t.completedAt : null);
+                    if (stDoneTimestamp) {
+                        const stDoneDate = new Date(stDoneTimestamp);
+                        if (stDoneDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) === dateStr) {
+                            actionsDoneToday++;
+                        }
+                    }
+                }
+            });
+        });
 
+        chartData_Velocity.push(actionsDoneToday);
         curr.setDate(curr.getDate() + 1);
-        if (dailyLabels.length > 31) break;
+        if (dailyLabels.length > 40) break; // Hard limit
     }
 
     // --- CHART RENDERING ---
@@ -243,7 +369,7 @@ function renderPerformanceChart(tasks) {
             labels: dailyLabels,
             datasets: [
                 {
-                    label: 'Missions Completed',
+                    label: 'Actions Completed (Tasks/Subtasks)',
                     data: chartData_Velocity,
                     borderColor: '#22d3ee',
                     backgroundColor: velocityGradient,
@@ -269,7 +395,7 @@ function renderPerformanceChart(tasks) {
                     titleFont: { size: 12, family: 'Inter', weight: '900' },
                     bodyFont: { size: 12, family: 'Inter' },
                     callbacks: {
-                        label: (context) => ` ${context.raw} Missions Completed`
+                        label: (context) => ` ${context.raw} Actions Done`
                     }
                 }
             },
@@ -303,7 +429,7 @@ function renderStatusDistribution(tasks) {
     // Group by member
     const memberStats = {};
     Object.keys(currentMembers).forEach(mId => {
-        memberStats[mId] = { total: 0, done: 0, name: currentMembers[mId].name };
+        memberStats[mId] = { mId: mId, total: 0, done: 0, name: currentMembers[mId].name };
     });
 
     tasks.forEach(t => {
@@ -317,37 +443,43 @@ function renderStatusDistribution(tasks) {
     const activeMembers = Object.values(memberStats).filter(s => s.total > 0);
 
     if (activeMembers.length === 0) {
-        distribution.innerHTML = '<p class="text-[10px] font-black uppercase text-gray-700 tracking-widest text-center py-10">No missions assigned yet</p>';
+        distribution.innerHTML = '<p class="text-[10px] font-black uppercase text-gray-700 tracking-widest text-center py-10">No tasks assigned yet</p>';
         return;
     }
 
     distribution.innerHTML = activeMembers.map(stats => {
-        const pct = Math.round((stats.done / stats.total) * 100);
+        // Calculate Mission Progress
+        const missionPct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+        
+        // Calculate Subtask Progress
+        let memberTotalSt = 0;
+        let memberDoneSt = 0;
+        
+        tasks.filter(t => t.assignedTo === stats.mId).forEach(t => {
+            const sts = t.subTasks || [];
+            memberTotalSt += sts.length;
+            memberDoneSt += sts.filter(st => st.status === 'Done' || st.completed === true).length;
+        });
 
-        let barGradient = 'from-accent-purple to-purple-400';
-        let barShadow = 'shadow-[0_0_15px_rgba(168,85,247,0.2)]';
-        let textColor = 'text-accent-purple';
-
-        if (pct === 100) {
-            barGradient = 'from-emerald-500 to-teal-400';
-            barShadow = 'shadow-[0_0_15px_rgba(16,185,129,0.3)]';
-            textColor = 'text-emerald-500';
-        } else if (pct > 0) {
-            barGradient = 'from-blue-600 to-cyan-400';
-            barShadow = 'shadow-[0_0_15px_rgba(37,99,235,0.2)]';
-            textColor = 'text-blue-500';
-        }
+        const stPct = memberTotalSt > 0 ? Math.round((memberDoneSt / memberTotalSt) * 100) : 0;
 
         return `
-            <div class="space-y-3 pb-2 group/member">
-                <div class="flex justify-between items-end text-[10px] font-black uppercase tracking-widest">
-                    <span class="text-white opacity-80 group-hover/member:opacity-100 transition-opacity">${stats.name}</span>
-                    <span class="${textColor} font-bold tracking-tighter text-xs">${stats.done}/${stats.total} DONE</span>
+            <div class="pb-6 border-b border-white/5 last:border-0 group/member flex flex-col gap-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-white text-base font-black uppercase tracking-tighter opacity-90 group-hover/member:opacity-100 transition-opacity">${stats.name}</span>
                 </div>
-                <div class="h-2.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/5 p-[1px] relative">
-                    <div class="h-full bg-gradient-to-r ${barGradient} ${barShadow} transition-all duration-1000 ease-out rounded-full relative" 
-                         style="width: ${pct}%">
-                        <div class="absolute inset-0 bg-white/20 mix-blend-overlay"></div>
+                
+                <div class="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-wider">
+                    <!-- Missions -->
+                    <div class="flex items-center justify-between bg-white/[0.03] px-4 py-2.5 rounded-xl border border-white/5 flex-grow">
+                        <span class="text-gray-500">Main Tasks</span>
+                        <span class="${missionPct === 100 ? 'text-emerald-500' : 'text-accent-purple'} font-black text-xs ml-2">${stats.done}/${stats.total}</span>
+                    </div>
+
+                    <!-- Subtasks -->
+                    <div class="flex items-center justify-between bg-white/[0.03] px-4 py-2.5 rounded-xl border border-white/5 flex-grow">
+                        <span class="text-gray-500">Subtasks</span>
+                        <span class="${stPct === 100 && memberTotalSt > 0 ? 'text-emerald-500' : 'text-blue-500'} font-black text-xs ml-2">${memberDoneSt}/${memberTotalSt}</span>
                     </div>
                 </div>
             </div>
@@ -355,24 +487,10 @@ function renderStatusDistribution(tasks) {
     }).join('');
 }
 
-function updateSprintInsight(velocity, tasks) {
-    const insightEl = document.getElementById('sprint-health-insight');
-    if (tasks.length === 0) {
-        insightEl.innerText = "Add some missions to this sprint to start generating health insights!";
-        return;
-    }
 
-    if (velocity >= 80) {
-        insightEl.innerText = "Sprint performance is exceptional! The team is burning through missions at high velocity with low friction.";
-    } else if (velocity >= 50) {
-        insightEl.innerText = "Sprint is moving steadily. Significant progress made, focused effort required to close remaining backlog.";
-    } else {
-        insightEl.innerText = "Velocity is currently lower than expected. Monitor mission barriers and ensure resources are properly allocated.";
-    }
-}
 
 function renderEmptyState() {
-    document.getElementById('chart-container').innerHTML = '<div class="w-full text-center py-20 text-gray-700 font-black uppercase tracking-widest text-sm">Waiting for mission data...</div>';
+    document.getElementById('chart-container').innerHTML = '<div class="w-full text-center py-20 text-gray-700 font-black uppercase tracking-widest text-sm">Waiting for task data...</div>';
     document.getElementById('status-distribution').innerHTML = '';
 }
 
