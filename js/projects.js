@@ -13,15 +13,71 @@ function initProjectsApp() {
     root.style.setProperty('--accent-from', '#a855f7');
     root.style.setProperty('--accent-to', '#7e22ce');
 
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            // Hide Welcome UI if active
+            const welcomeUI = document.getElementById('global-welcome-interface');
+            if (welcomeUI) welcomeUI.classList.add('hidden', 'opacity-0', 'pointer-events-none');
+
+            // Daily Check
+            const today = new Date().toDateString();
+            const lastAuth = localStorage.getItem('tt_last_auth_date');
+            
+            if (lastAuth !== today) {
+                auth.signOut().then(() => {
+                    localStorage.removeItem('tt_last_auth_date');
+                    if (typeof showWelcomeInterface === 'function') {
+                        showWelcomeInterface();
+                    }
+                });
+                return;
+            }
+
+            // Normal flow
+            loadProjects();
+        } else {
+            // Need Auth
+            if (typeof showWelcomeInterface === 'function') {
+                showWelcomeInterface();
+            } else {
+                setTimeout(() => {
+                    if (typeof showWelcomeInterface === 'function') showWelcomeInterface();
+                }, 500);
+            }
+            hideLoader();
+        }
+    });
+}
+
+function loadProjects() {
     const loadingText = document.getElementById('loading-text');
     if (loadingText) loadingText.innerText = "Connecting to Database...";
 
+    let resolved = false;
+    const timeout = setTimeout(() => {
+        if (!resolved) {
+            hideLoader();
+            showNotification("Connection timed out. Check your network and refresh.", true);
+        }
+    }, 10000);
+
     database.ref('projects').on('value', snap => {
+        if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+        }
         if (loadingText) loadingText.innerText = "Loading Projects...";
         allProjects = snap.val() || {};
         renderProjects();
         filterIcons(''); // Initialize icon grid
         hideLoader();
+
+        // Check for auto-select from URL (Meeting Invite)
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharedProjId = urlParams.get('projId');
+        if (sharedProjId && allProjects[sharedProjId]) {
+            selectProject(sharedProjId, allProjects[sharedProjId].name);
+        }
     });
 }
 
@@ -87,19 +143,29 @@ function deleteProject(id) {
 
     // 1. Task Overload Check (More than 10 tasks)
     const taskCount = Object.keys(p.tasks || {}).length;
-    if (taskCount > 10) {
+    if (taskCount > 10 && !isAdminActive()) {
         showNotification(`Large projects can't be deleted (${taskCount} tasks)`, true);
         return;
     }
 
     // 2. Project Age Check (Older than 4 days)
     const now = Date.now();
-    const ageInMs = now - (p.createdAt || p.updatedAt || now);
-    const ageInDays = ageInMs / (1000 * 60 * 60 * 24);
-
-    if (ageInDays > 4) {
-        showNotification("Established projects can't be deleted (Older than 4 days)", true);
-        return;
+    const createdAt = p.createdAt;
+    
+    // Strictly check creation time. If missing, assume established for safety.
+    if (!isAdminActive()) {
+        if (createdAt) {
+            const ageInMs = now - Number(createdAt);
+            const ageInDays = ageInMs / (1000 * 60 * 60 * 24);
+            if (ageInDays > 4) {
+                showNotification("Established projects can't be deleted (Older than 4 days)", true);
+                return;
+            }
+        } else {
+            // No creation timestamp found - treat as established/legacy data
+            showNotification("Established projects can't be deleted", true);
+            return;
+        }
     }
 
     requestSecurityAuth(() => {
