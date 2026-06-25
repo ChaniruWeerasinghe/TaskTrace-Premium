@@ -78,6 +78,14 @@ function loadProjects() {
         if (sharedProjId && allProjects[sharedProjId]) {
             selectProject(sharedProjId, allProjects[sharedProjId].name);
         }
+    }, error => {
+        if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+        }
+        hideLoader();
+        showNotification("Database Error: " + error.message, true);
+        console.error("Firebase DB Error:", error);
     });
 }
 
